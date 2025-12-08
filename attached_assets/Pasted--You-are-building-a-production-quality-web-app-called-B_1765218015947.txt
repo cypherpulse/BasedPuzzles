@@ -1,0 +1,1154 @@
+
+
+You are building a production‑quality web app called **“Based Puzzles”**.
+
+## High‑level concept
+
+Create a **Base‑themed puzzle app** where users can:
+
+- Choose between two puzzle types:
+  - **Sudoku** (classic 9×9).
+  - **Crossword** (Base/crypto‑themed clues).
+- Play, track progress, compete on **leaderboards**, and see their **profile/stats**.
+- Enjoy a fun, replayable experience that feels like a proper game:
+  - Difficulty levels.
+  - Streaks and achievements.
+  - Optional timed mode.
+- All built with **React + TypeScript + Tailwind CSS**, structured cleanly and ready for future onchain integration on Base (but no onchain logic is required right now).
+
+Important changes vs earlier spec:
+
+- **Sudoku is no longer gated by quizzes after solving.**  
+- Crosswords can still be Base‑themed and “knowledge‑heavy,” but there’s no mandatory quiz after submission.  
+- Core focus is: fun, replayability, leaderboards, and puzzle variety.
+
+***
+
+## 1. Tech stack and project structure
+
+Use:
+
+- React (functional components, hooks only).
+- TypeScript with strict typing.
+- Tailwind CSS for styling (with Base‑inspired theme).
+- A modular structure that separates:
+  - Modes (Sudoku / Crossword).
+  - Shared layout and navigation.
+  - Game logic vs UI.
+  - Persistence (localStorage for now).
+
+Suggested structure (you can adapt):
+
+- `src/app` or `src/pages`
+  - `app/page.tsx` or `pages/index.tsx` – main entry.
+- `src/components`
+  - `ModeSwitcher.tsx`
+  - `Header.tsx`
+  - `Footer.tsx`
+  - `Leaderboard.tsx`
+  - `ProfileStats.tsx`
+- `src/components/modes`
+  - `SudokuMode.tsx`
+  - `CrosswordMode.tsx`
+- `src/components/sudoku`
+  - `SudokuGrid.tsx`
+  - `SudokuControls.tsx`
+- `src/components/crossword`
+  - `CrosswordGrid.tsx`
+  - `CrosswordClues.tsx`
+  - `CrosswordControls.tsx`
+- `src/hooks`
+  - `useSudokuGame.ts`
+  - `useCrosswordGame.ts`
+  - `useLeaderboard.ts`
+  - `usePlayerStats.ts`
+- `src/lib`
+  - `sudoku.ts`
+  - `crossword.ts`
+  - `puzzles-sudoku.ts`
+  - `puzzles-crossword.ts`
+- `src/types`
+  - `puzzle.ts`
+  - `sudoku.ts`
+  - `crossword.ts`
+  - `stats.ts`
+  - `leaderboard.ts`
+
+***
+
+## 2. Global app behavior
+
+### Puzzle mode selection
+
+Define:
+
+```ts
+type PuzzleMode = 'sudoku' | 'crossword';
+```
+
+- Main container keeps `mode` in state and in `localStorage`.
+- Use a **ModeSwitcher** component:
+
+```ts
+interface ModeSwitcherProps {
+  mode: PuzzleMode;
+  onChange: (mode: PuzzleMode) => void;
+}
+```
+
+UI:
+
+- Two big buttons/tabs: “Sudoku” and “Crossword”.
+- Active mode button styled with Base blue background and white text.
+- Inactive mode outlined with Base blue border.
+
+### Main layout
+
+Top‑level layout:
+
+- Header (app title + user summary).
+- Mode switcher.
+- Main content area (mode-specific).
+- Right sidebar or bottom section with:
+  - Leaderboard.
+  - Player stats.
+- Footer with small links / credits.
+
+***
+
+## 3. Sudoku mode (classic, fun, no quiz gating)
+
+### Data model
+
+Use:
+
+```ts
+export interface SudokuCell {
+  value: number | null;
+  row: number;
+  col: number;
+  readonly: boolean;
+}
+
+export type SudokuBoard = SudokuCell[][];
+export type SudokuDifficulty = 'easy' | 'medium' | 'hard';
+```
+
+### Game logic
+
+In `lib/sudoku.ts`:
+
+- Store a small set of predefined puzzles per difficulty.
+- Provide helpers:
+  - `getSudokuPuzzle(difficulty: SudokuDifficulty): SudokuBoard`
+  - `isRowValid(board, rowIndex): boolean`
+  - `isColValid(board, colIndex): boolean`
+  - `isBoxValid(board, boxRowIndex, boxColIndex): boolean`
+  - `isBoardSolved(board): boolean`
+  - `getErrorCells(board): Set<string>` (e.g. `"r2c5"`)
+
+### Hook
+
+In `useSudokuGame.ts`:
+
+- State:
+  - `board`
+  - `initialBoard`
+  - `difficulty`
+  - `selectedCell`
+  - `errors`
+  - `timerSeconds`
+  - `status: 'playing' | 'solved'`
+- API:
+  - `setDifficulty(difficulty)`
+  - `startNewGame()`
+  - `selectCell(row, col)`
+  - `updateCell(row, col, value)`
+  - `resetBoard()`
+  - `checkSolution()` – sets `status` and updates errors; if solved, stops timer and returns result.
+
+### UI
+
+`SudokuMode.tsx`:
+
+- Layout:
+  - Left: `SudokuGrid` + controls.
+  - Right/top: difficulty selector, timer, completion info.
+- Controls:
+  - Difficulty buttons.
+  - New game.
+  - Check solution.
+  - Optional: “Notes” toggle (if you want to allow candidates later).
+
+`SudokuGrid.tsx`:
+
+- Props:
+  - `board`, `errors`, `selected`, `onCellSelect`, `onCellChange`.
+- Behavior:
+  - Click to select.
+  - Keyboard events (numbers 1–9, backspace) to change value.
+- Styling:
+  - Base blue for main grid lines.
+  - Light gray for minor lines.
+  - Selected cell highlight with blue tint.
+  - Error cells with red outline or text color.
+
+### Completion & stats (Sudoku)
+
+When `checkSolution` detects a solved board:
+
+- Show a “Puzzle solved!” panel with:
+  - Time taken.
+  - Difficulty.
+  - “Save to leaderboard” button.
+  - “Play again” option.
+
+Update:
+
+- Player stats via `usePlayerStats`.
+- Leaderboard via `useLeaderboard` (see sections below).
+
+No quiz is triggered after Sudoku; completion is purely based on board correctness.
+
+***
+
+## 4. Crossword mode (Base‑flavored, challenging)
+
+### Data model
+
+In `types/crossword.ts`:
+
+```ts
+export interface CrosswordCell {
+  row: number;
+  col: number;
+  letter: string | null;    // correct solution
+  userLetter: string | null;
+  isBlock: boolean;
+}
+
+export interface CrosswordClue {
+  id: string;
+  number: number;
+  direction: 'across' | 'down';
+  row: number;
+  col: number;
+  length: number;
+  prompt: string;           // Base / crypto themed clue
+}
+
+export interface CrosswordPuzzle {
+  id: string;
+  title: string;
+  width: number;
+  height: number;
+  grid: CrosswordCell[][];
+  clues: CrosswordClue[];
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+```
+
+In `puzzles-crossword.ts`:
+
+- Define at least 1–3 **Base‑themed puzzles**.
+  - Clues about Base as an open stack for the global economy, Base App features (post, trade, chat, earn), and broader crypto culture.
+  - Keep them solvable but challenging.
+
+### Logic
+
+In `lib/crossword.ts`:
+
+- `isCrosswordSolved(puzzle: CrosswordPuzzle): boolean` – all non‑block `userLetter` set and match `letter` (case‑insensitive).
+- `getIncorrectCells(puzzle: CrosswordPuzzle): Set<string>` – return mismatched cells.
+- Utility to map between clue and cells, e.g.:
+  - `getCellsForClue(puzzle, clue): CrosswordCell[]`.
+
+### Hook
+
+In `useCrosswordGame.ts`:
+
+- State:
+  - `puzzle`
+  - `selectedCell`
+  - `activeClueId`
+  - `incorrectCells`
+  - `timerSeconds`
+  - `status: 'playing' | 'solved'`
+- API:
+  - `setPuzzleByDifficulty(difficulty)`
+  - `selectCell(row, col)`
+  - `selectClue(clueId)`
+  - `setLetter(row, col, letter)`
+  - `checkSolution()`
+
+### UI
+
+`CrosswordMode.tsx`:
+
+- Layout:
+  - Left: `CrosswordGrid`.
+  - Right: `CrosswordClues` + controls + timer.
+- Controls:
+  - Difficulty selection (if multiple puzzles).
+  - New puzzle.
+  - “Check puzzle” button.
+  - Optional: “Reveal letter” / “Reveal word” for helpers (can cost streak points if you want).
+
+`CrosswordGrid.tsx`:
+
+- Render squares:
+  - Blocks as filled dark squares.
+  - Letter cells as small inputs or clickable tiles.
+- Behavior:
+  - Click to select; highlight the active clue’s line.
+  - Typing letters moves along the clue direction.
+  - Backspace moves back.
+
+`CrosswordClues.tsx`:
+
+- Group clues into “Across” and “Down”.
+- Highlight active clue; clicking a clue selects it in the grid.
+
+### Completion & stats (Crossword)
+
+On successful solve:
+
+- Show “Crossword complete!” panel with time and difficulty.
+- “Save to leaderboard” + “Next puzzle” controls.
+- Update player stats and leaderboard with mode `crossword`.
+
+***
+
+## 5. Player profile, stats, and achievements
+
+Define stats types in `stats.ts`:
+
+```ts
+export interface ModeStats {
+  gamesCompleted: number;
+  bestTimeSeconds?: number;
+  totalPuzzlesStarted: number;
+}
+
+export interface PlayerStats {
+  sudoku: ModeStats;
+  crossword: ModeStats;
+  streakDays: number; // daily streak of playing at least one puzzle
+}
+```
+
+`usePlayerStats.ts`:
+
+- Load/save stats from `localStorage`.
+- Expose helpers:
+  - `recordCompletion(mode, timeSeconds)`
+  - `incrementStarted(mode)`
+  - `updateStreak()` (based on dates).
+
+`ProfileStats.tsx`:
+
+- Show:
+  - Total puzzles completed (per mode).
+  - Best times (per mode).
+  - Current streak.
+  - Simple “titles” based on thresholds (e.g., “Base Rookie”, “Base Grinder”, “Base OG”).
+
+***
+
+## 6. Leaderboards (local / demo style)
+
+For now, implement **local leaderboards** (not global networked ones) but design the data model so a backend/onchain version can be added later.
+
+In `leaderboard.ts`:
+
+```ts
+export type LeaderboardMode = 'sudoku' | 'crossword';
+
+export interface LeaderboardEntry {
+  id: string; // uuid
+  mode: LeaderboardMode;
+  playerName: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  timeSeconds: number;
+  completedAt: number;
+}
+```
+
+`useLeaderboard.ts`:
+
+- Stores an array of `LeaderboardEntry` in `localStorage`.
+- API:
+  - `getEntries(mode, difficulty?)`
+  - `addEntry(entry)`
+  - Automatically sort by time ascending.
+
+`Leaderboard.tsx`:
+
+- Props:
+  - `mode: LeaderboardMode`
+- Show top N entries per mode (and optionally by difficulty).
+- Simple table:
+  - Rank, Name, Difficulty, Time, Date.
+
+### On completion flows
+
+When a puzzle is solved:
+
+- Ask the user for a display name if not already set (store in localStorage).
+- Show “Save to leaderboard?” with name pre‑filled.
+- On confirm, `addEntry` with relevant data.
+
+***
+
+## 7. Game modes & extra fun/requiring features
+
+Make it more engaging and “requiring”:
+
+1. **Timed Mode (default)**  
+   - Both Sudoku and Crossword start a timer on first interaction.
+   - Timer is always visible.
+   - Best times saved in stats.
+
+2. **Daily Challenge (optional, front‑end only)**  
+   - Provide a special “Daily Sudoku” and/or “Daily Crossword” ID derived from the date (pick from puzzle bank deterministically).
+   - Show a “Daily” badge in the UI.
+   - Track `dailyCompleted` per mode in stats.
+
+3. **Soft penalties for help**  
+   - If you implement hints in Sudoku or “reveal letter/word” in Crossword:
+     - Don’t disqualify completion, but mark the run as “assisted” and maybe don’t allow it into leaderboards.
+   - This keeps leaderboards competitive.
+
+4. **Titles / tiers**  
+   - Derive a simple tier name from stats:
+     - E.g., `gamesCompleted` and `bestTimeSeconds` thresholds.
+   - Display under profile name.
+
+***
+
+## 8. Tailwind + Base visual design
+
+Use Tailwind config with Base‑inspired tokens:
+
+- Primary blue (for accents, borders, buttons).
+- Light background and grays.
+- Red/orange for error states.
+
+Example design rules:
+
+- Header:
+  - White background, subtle bottom border, title in Base blue.
+- Mode switcher:
+  - Buttons with rounded corners and clear active state.
+- Boards:
+  - Sudoku: clean, high contrast, lots of white space around the grid.
+  - Crossword: similar, with clear black blocks and blue highlight for active clue.
+- Leaderboard & stats:
+  - Simple cards with subtle shadows, consistent typography.
+
+***
+
+## 9. Developer experience
+
+- Strict TypeScript everywhere.
+- React hooks for state; no class components.
+- Clear separation of logic (in hooks/lib) from UI (components).
+- Add basic tests for:
+  - Sudoku validation functions.
+  - Crossword validation functions.
+
+***
+
+## 10. Deliverables
+
+The agent should output a repo or project with:
+
+1. A running **Based Puzzles** web app (React + TS + Tailwind) where:
+   - User can choose Sudoku or Crossword.
+   - Both puzzle types are fully playable.
+   - Sudoku is validated and completed with **no quiz gating**.
+   - Crosswords are Base‑flavored and fully validated.
+2. Local **leaderboards** for each mode.
+3. **Player profile/stats** with streaks and best times.
+4. Clean component and hook structure, ready to plug into Base onchain integration later.
+5. A short README explaining:
+   - How to run the app.
+   - How puzzles are organized and how to add more.
+   - How stats and leaderboards work.
+   - Where to integrate real backend/onchain logic in the future.
+
+Use this entire description as the complete specification for the updated **Based Puzzles** app.
+
+
+Design prompt
+
+
+You are building a production‑quality web app called **“Based Puzzles”**.
+
+## High‑level concept
+
+Create a **Base‑themed puzzle app** where users can:
+
+- Choose between two puzzle types:
+  - **Sudoku** (classic 9×9).
+  - **Crossword** (Base/crypto‑themed clues).
+- Play, track progress, compete on **leaderboards**, and see their **profile/stats**.
+- Enjoy a fun, replayable experience that feels like a proper game:
+  - Difficulty levels.
+  - Streaks and achievements.
+  - Optional timed mode.
+- All built with **React + TypeScript + Tailwind CSS**, structured cleanly and ready for future onchain integration on Base (but no onchain logic is required right now).
+
+Important changes vs earlier spec:
+
+- **Sudoku is no longer gated by quizzes after solving.**  
+- Crosswords can still be Base‑themed and “knowledge‑heavy,” but there’s no mandatory quiz after submission.  
+- Core focus is: fun, replayability, leaderboards, and puzzle variety.
+
+***
+
+## 1. Tech stack and project structure
+
+Use:
+
+- React (functional components, hooks only).
+- TypeScript with strict typing.
+- Tailwind CSS for styling (with Base‑inspired theme).
+- A modular structure that separates:
+  - Modes (Sudoku / Crossword).
+  - Shared layout and navigation.
+  - Game logic vs UI.
+  - Persistence (localStorage for now).
+
+Suggested structure (you can adapt):
+
+- `src/app` or `src/pages`
+  - `app/page.tsx` or `pages/index.tsx` – main entry.
+- `src/components`
+  - `ModeSwitcher.tsx`
+  - `Header.tsx`
+  - `Footer.tsx`
+  - `Leaderboard.tsx`
+  - `ProfileStats.tsx`
+- `src/components/modes`
+  - `SudokuMode.tsx`
+  - `CrosswordMode.tsx`
+- `src/components/sudoku`
+  - `SudokuGrid.tsx`
+  - `SudokuControls.tsx`
+- `src/components/crossword`
+  - `CrosswordGrid.tsx`
+  - `CrosswordClues.tsx`
+  - `CrosswordControls.tsx`
+- `src/hooks`
+  - `useSudokuGame.ts`
+  - `useCrosswordGame.ts`
+  - `useLeaderboard.ts`
+  - `usePlayerStats.ts`
+- `src/lib`
+  - `sudoku.ts`
+  - `crossword.ts`
+  - `puzzles-sudoku.ts`
+  - `puzzles-crossword.ts`
+- `src/types`
+  - `puzzle.ts`
+  - `sudoku.ts`
+  - `crossword.ts`
+  - `stats.ts`
+  - `leaderboard.ts`
+
+***
+
+## 2. Global app behavior
+
+### Puzzle mode selection
+
+Define:
+
+```ts
+type PuzzleMode = 'sudoku' | 'crossword';
+```
+
+- Main container keeps `mode` in state and in `localStorage`.
+- Use a **ModeSwitcher** component:
+
+```ts
+interface ModeSwitcherProps {
+  mode: PuzzleMode;
+  onChange: (mode: PuzzleMode) => void;
+}
+```
+
+UI:
+
+- Two big buttons/tabs: “Sudoku” and “Crossword”.
+- Active mode button styled with Base blue background and white text.
+- Inactive mode outlined with Base blue border.
+
+### Main layout
+
+Top‑level layout:
+
+- Header (app title + user summary).
+- Mode switcher.
+- Main content area (mode-specific).
+- Right sidebar or bottom section with:
+  - Leaderboard.
+  - Player stats.
+- Footer with small links / credits.
+
+***
+
+## 3. Sudoku mode (classic, fun, no quiz gating)
+
+### Data model
+
+Use:
+
+```ts
+export interface SudokuCell {
+  value: number | null;
+  row: number;
+  col: number;
+  readonly: boolean;
+}
+
+export type SudokuBoard = SudokuCell[][];
+export type SudokuDifficulty = 'easy' | 'medium' | 'hard';
+```
+
+### Game logic
+
+In `lib/sudoku.ts`:
+
+- Store a small set of predefined puzzles per difficulty.
+- Provide helpers:
+  - `getSudokuPuzzle(difficulty: SudokuDifficulty): SudokuBoard`
+  - `isRowValid(board, rowIndex): boolean`
+  - `isColValid(board, colIndex): boolean`
+  - `isBoxValid(board, boxRowIndex, boxColIndex): boolean`
+  - `isBoardSolved(board): boolean`
+  - `getErrorCells(board): Set<string>` (e.g. `"r2c5"`)
+
+### Hook
+
+In `useSudokuGame.ts`:
+
+- State:
+  - `board`
+  - `initialBoard`
+  - `difficulty`
+  - `selectedCell`
+  - `errors`
+  - `timerSeconds`
+  - `status: 'playing' | 'solved'`
+- API:
+  - `setDifficulty(difficulty)`
+  - `startNewGame()`
+  - `selectCell(row, col)`
+  - `updateCell(row, col, value)`
+  - `resetBoard()`
+  - `checkSolution()` – sets `status` and updates errors; if solved, stops timer and returns result.
+
+### UI
+
+`SudokuMode.tsx`:
+
+- Layout:
+  - Left: `SudokuGrid` + controls.
+  - Right/top: difficulty selector, timer, completion info.
+- Controls:
+  - Difficulty buttons.
+  - New game.
+  - Check solution.
+  - Optional: “Notes” toggle (if you want to allow candidates later).
+
+`SudokuGrid.tsx`:
+
+- Props:
+  - `board`, `errors`, `selected`, `onCellSelect`, `onCellChange`.
+- Behavior:
+  - Click to select.
+  - Keyboard events (numbers 1–9, backspace) to change value.
+- Styling:
+  - Base blue for main grid lines.
+  - Light gray for minor lines.
+  - Selected cell highlight with blue tint.
+  - Error cells with red outline or text color.
+
+### Completion & stats (Sudoku)
+
+When `checkSolution` detects a solved board:
+
+- Show a “Puzzle solved!” panel with:
+  - Time taken.
+  - Difficulty.
+  - “Save to leaderboard” button.
+  - “Play again” option.
+
+Update:
+
+- Player stats via `usePlayerStats`.
+- Leaderboard via `useLeaderboard` (see sections below).
+
+No quiz is triggered after Sudoku; completion is purely based on board correctness.
+
+***
+
+## 4. Crossword mode (Base‑flavored, challenging)
+
+### Data model
+
+In `types/crossword.ts`:
+
+```ts
+export interface CrosswordCell {
+  row: number;
+  col: number;
+  letter: string | null;    // correct solution
+  userLetter: string | null;
+  isBlock: boolean;
+}
+
+export interface CrosswordClue {
+  id: string;
+  number: number;
+  direction: 'across' | 'down';
+  row: number;
+  col: number;
+  length: number;
+  prompt: string;           // Base / crypto themed clue
+}
+
+export interface CrosswordPuzzle {
+  id: string;
+  title: string;
+  width: number;
+  height: number;
+  grid: CrosswordCell[][];
+  clues: CrosswordClue[];
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+```
+
+In `puzzles-crossword.ts`:
+
+- Define at least 1–3 **Base‑themed puzzles**.
+  - Clues about Base as an open stack for the global economy, Base App features (post, trade, chat, earn), and broader crypto culture.
+  - Keep them solvable but challenging.
+
+### Logic
+
+In `lib/crossword.ts`:
+
+- `isCrosswordSolved(puzzle: CrosswordPuzzle): boolean` – all non‑block `userLetter` set and match `letter` (case‑insensitive).
+- `getIncorrectCells(puzzle: CrosswordPuzzle): Set<string>` – return mismatched cells.
+- Utility to map between clue and cells, e.g.:
+  - `getCellsForClue(puzzle, clue): CrosswordCell[]`.
+
+### Hook
+
+In `useCrosswordGame.ts`:
+
+- State:
+  - `puzzle`
+  - `selectedCell`
+  - `activeClueId`
+  - `incorrectCells`
+  - `timerSeconds`
+  - `status: 'playing' | 'solved'`
+- API:
+  - `setPuzzleByDifficulty(difficulty)`
+  - `selectCell(row, col)`
+  - `selectClue(clueId)`
+  - `setLetter(row, col, letter)`
+  - `checkSolution()`
+
+### UI
+
+`CrosswordMode.tsx`:
+
+- Layout:
+  - Left: `CrosswordGrid`.
+  - Right: `CrosswordClues` + controls + timer.
+- Controls:
+  - Difficulty selection (if multiple puzzles).
+  - New puzzle.
+  - “Check puzzle” button.
+  - Optional: “Reveal letter” / “Reveal word” for helpers (can cost streak points if you want).
+
+`CrosswordGrid.tsx`:
+
+- Render squares:
+  - Blocks as filled dark squares.
+  - Letter cells as small inputs or clickable tiles.
+- Behavior:
+  - Click to select; highlight the active clue’s line.
+  - Typing letters moves along the clue direction.
+  - Backspace moves back.
+
+`CrosswordClues.tsx`:
+
+- Group clues into “Across” and “Down”.
+- Highlight active clue; clicking a clue selects it in the grid.
+
+### Completion & stats (Crossword)
+
+On successful solve:
+
+- Show “Crossword complete!” panel with time and difficulty.
+- “Save to leaderboard” + “Next puzzle” controls.
+- Update player stats and leaderboard with mode `crossword`.
+
+***
+
+## 5. Player profile, stats, and achievements
+
+Define stats types in `stats.ts`:
+
+```ts
+export interface ModeStats {
+  gamesCompleted: number;
+  bestTimeSeconds?: number;
+  totalPuzzlesStarted: number;
+}
+
+export interface PlayerStats {
+  sudoku: ModeStats;
+  crossword: ModeStats;
+  streakDays: number; // daily streak of playing at least one puzzle
+}
+```
+
+`usePlayerStats.ts`:
+
+- Load/save stats from `localStorage`.
+- Expose helpers:
+  - `recordCompletion(mode, timeSeconds)`
+  - `incrementStarted(mode)`
+  - `updateStreak()` (based on dates).
+
+`ProfileStats.tsx`:
+
+- Show:
+  - Total puzzles completed (per mode).
+  - Best times (per mode).
+  - Current streak.
+  - Simple “titles” based on thresholds (e.g., “Base Rookie”, “Base Grinder”, “Base OG”).
+
+***
+
+## 6. Leaderboards (local / demo style)
+
+For now, implement **local leaderboards** (not global networked ones) but design the data model so a backend/onchain version can be added later.
+
+In `leaderboard.ts`:
+
+```ts
+export type LeaderboardMode = 'sudoku' | 'crossword';
+
+export interface LeaderboardEntry {
+  id: string; // uuid
+  mode: LeaderboardMode;
+  playerName: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  timeSeconds: number;
+  completedAt: number;
+}
+```
+
+`useLeaderboard.ts`:
+
+- Stores an array of `LeaderboardEntry` in `localStorage`.
+- API:
+  - `getEntries(mode, difficulty?)`
+  - `addEntry(entry)`
+  - Automatically sort by time ascending.
+
+`Leaderboard.tsx`:
+
+- Props:
+  - `mode: LeaderboardMode`
+- Show top N entries per mode (and optionally by difficulty).
+- Simple table:
+  - Rank, Name, Difficulty, Time, Date.
+
+### On completion flows
+
+When a puzzle is solved:
+
+- Ask the user for a display name if not already set (store in localStorage).
+- Show “Save to leaderboard?” with name pre‑filled.
+- On confirm, `addEntry` with relevant data.
+
+***
+
+## 7. Game modes & extra fun/requiring features
+
+Make it more engaging and “requiring”:
+
+1. **Timed Mode (default)**  
+   - Both Sudoku and Crossword start a timer on first interaction.
+   - Timer is always visible.
+   - Best times saved in stats.
+
+2. **Daily Challenge (optional, front‑end only)**  
+   - Provide a special “Daily Sudoku” and/or “Daily Crossword” ID derived from the date (pick from puzzle bank deterministically).
+   - Show a “Daily” badge in the UI.
+   - Track `dailyCompleted` per mode in stats.
+
+3. **Soft penalties for help**  
+   - If you implement hints in Sudoku or “reveal letter/word” in Crossword:
+     - Don’t disqualify completion, but mark the run as “assisted” and maybe don’t allow it into leaderboards.
+   - This keeps leaderboards competitive.
+
+4. **Titles / tiers**  
+   - Derive a simple tier name from stats:
+     - E.g., `gamesCompleted` and `bestTimeSeconds` thresholds.
+   - Display under profile name.
+
+***
+
+## 8. Tailwind + Base visual design
+
+Use Tailwind config with Base‑inspired tokens:
+
+- Primary blue (for accents, borders, buttons).
+- Light background and grays.
+- Red/orange for error states.
+
+Example design rules:
+
+- Header:
+  - White background, subtle bottom border, title in Base blue.
+- Mode switcher:
+  - Buttons with rounded corners and clear active state.
+- Boards:
+  - Sudoku: clean, high contrast, lots of white space around the grid.
+  - Crossword: similar, with clear black blocks and blue highlight for active clue.
+- Leaderboard & stats:
+  - Simple cards with subtle shadows, consistent typography.
+
+***
+
+## 9. Developer experience
+
+- Strict TypeScript everywhere.
+- React hooks for state; no class components.
+- Clear separation of logic (in hooks/lib) from UI (components).
+- Add basic tests for:
+  - Sudoku validation functions.
+  - Crossword validation functions.
+
+***
+
+## 10. Deliverables
+
+The agent should output a repo or project with:
+
+1. A running **Based Puzzles** web app (React + TS + Tailwind) where:
+   - User can choose Sudoku or Crossword.
+   - Both puzzle types are fully playable.
+   - Sudoku is validated and completed with **no quiz gating**.
+   - Crosswords are Base‑flavored and fully validated.
+2. Local **leaderboards** for each mode.
+3. **Player profile/stats** with streaks and best times.
+4. Clean component and hook structure, ready to plug into Base onchain integration later.
+5. A short README explaining:
+   - How to run the app.
+   - How puzzles are organized and how to add more.
+   - How stats and leaderboards work.
+   - Where to integrate real backend/onchain logic in the future.
+
+Use this entire description as the complete specification for the updated **Based Puzzles** app.
+
+
+Design delivarables
+
+To make Based Puzzles visually “give”, the UI should feel like a modern game hub: gradient background, glassmorphism cards, smooth micro-interactions, and strong visual hierarchy, all still in Base’s clean, blue‑forward aesthetic.[1][2][3]
+
+Below is an updated design-focused prompt you can add on top of your existing spec and send to the agent. It tells the agent to **keep your logic** but **upgrade the UI/UX** heavily.
+
+***
+
+Update the **Based Puzzles** app (Sudoku + Crossword) to have a **modern, game‑hub‑grade UI** using React + TypeScript + Tailwind CSS. Keep the existing logic and structure, but overhaul the design and interactions to be visually appealing and highly engaging.
+
+### 1. Overall visual direction
+
+- Style the app like a **game dashboard / hub**, not a plain utility page.[4][5]
+- Use a **full-page gradient background** inspired by Base colors:
+  - Darker blue at the top fading to a softer blue or subtle purple lower down.
+  - Example Tailwind classes: `bg-gradient-to-b from-sky-900 via-sky-950 to-slate-950` (tune these to match the Base palette).
+- On top of the gradient, place **glassmorphism cards** for:
+  - Main game area.
+  - Sidebar (leaderboard & stats).
+  - Header hero strip.[2][3]
+- Use **backdrop blur**, transparency, and soft borders:
+  - `bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-xl`.
+
+### 2. Layout
+
+- Desktop:
+  - Top: header with logo/title + mini profile + mode switcher.
+  - Middle:
+    - Left (≈ 2/3 width): active game card (Sudoku or Crossword).
+    - Right (≈ 1/3 width): stacked cards for Leaderboard and Player Stats.
+- Mobile:
+  - Header at top.
+  - Mode switcher below.
+  - Game card full width.
+  - Leaderboard and stats stacked under the game card with good spacing.
+- Use Tailwind responsive utilities (`md:`, `lg:`) to ensure the layout scales cleanly.[6][7]
+
+### 3. Header & mode switcher
+
+- Header card:
+  - Glassmorphism style bar with:
+    - App name “Based Puzzles” in large, bold, white or near-white text.
+    - Small subtitle: “Play Sudoku & Crosswords, climb the leaderboard, and rep Base.”
+  - Add a small circular avatar placeholder and a greeting (“GM, Player”) on the right.
+- Mode switcher:
+  - Two large pill buttons: **Sudoku** and **Crossword**.
+  - Active mode styles:
+    - `bg-white text-sky-900 shadow-lg scale-[1.02]`.
+  - Inactive mode styles:
+    - `bg-white/5 text-white/80 border border-white/20`.
+  - Add a subtle transition for hover/press:
+    - `transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5`.
+
+### 4. Game cards (Sudoku & Crossword)
+
+Both Sudoku and Crossword views should live inside a **primary glass card** with consistent styling:
+
+- Base card styles:
+  - `bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl shadow-2xl p-4 sm:p-6 lg:p-8`.
+- Top area inside card:
+  - Game title (e.g., “Sudoku – Medium”) + difficulty pills.
+  - Timer chip (small rounded badge with an icon).
+- Middle area:
+  - The grid (SudokuGrid or CrosswordGrid) centered with responsive sizing.
+- Bottom area:
+  - Primary/secondary actions (New Game, Check Solution, etc.).
+  - For Sudoku, consider a small row of number buttons on mobile for easier input.
+
+#### Sudoku presentation
+
+- Grid:
+  - Outer border: a bright Base blue.
+  - 3×3 boundaries slightly thicker or different color.
+  - Cell background:
+    - Default: `bg-white/5`.
+    - Selected: `bg-sky-500/20 border border-sky-400/80`.
+    - Error: `bg-rose-500/10 border border-rose-400`.
+- Add subtle hover and focus states:
+  - `hover:bg-white/10` on hover for clickable cells.
+  - Focus ring: `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400`.
+- Animate solving:
+  - When puzzle is solved, briefly animate the grid:
+    - `animate-[pulse_0.7s_ease-out_1]` or use a small scale/opacity animation on the card.
+
+#### Crossword presentation
+
+- Grid:
+  - Blocks: `bg-slate-900/80` with subtle inset shadow.
+  - Letter cells:
+    - Default: `bg-white/5 border border-white/10`.
+    - Active clue cells: `bg-sky-500/20 border border-sky-400/60`.
+    - Selected cell: slightly higher opacity highlight.
+- Clue list:
+  - Place in a column to the right of the grid on desktop, and below on mobile.
+  - Each clue as a card:
+    - `bg-white/3 hover:bg-white/7 rounded-xl px-3 py-2 text-sm`.
+  - Active clue:
+    - `border border-sky-400 bg-sky-500/15`.
+- Smooth scroll to active clue when selected.
+
+### 5. Micro-interactions & feedback
+
+Add deliberate micro‑interactions (lightweight, but everywhere):[8][3]
+
+- Buttons:
+  - Use `transition`, `shadow`, and subtle scale transforms.
+  - Example: `transition-all duration-150 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0 active:shadow-md`.
+- Timer:
+  - Slight pulsing glow every minute or when a new personal record is set.
+- Leaderboard entry:
+  - When a new score is saved, briefly highlight the row:
+    - `bg-emerald-500/15` with a small fade-out.
+- Mode changes:
+  - Crossfade or slight slide between Sudoku and Crossword cards using Tailwind + conditional classes or framer-motion (if allowed).
+
+### 6. Leaderboard & stats UI
+
+Leaderboard card:
+
+- Glass card stacked in the sidebar with title “Leaderboard”.
+- Tabs or segmented buttons for **Sudoku / Crossword**.
+- Simple table list:
+  - Row with rank, name, difficulty badge, time.
+  - Difficulty as pill badges with distinct colors per level:
+    - Easy: green, Medium: amber, Hard: red.
+- Use zebra striping with semi-transparent backgrounds for readability.
+
+Stats card:
+
+- Show player’s:
+  - Total completions per mode.
+  - Best times.
+  - Streak (with a flame or streak icon).
+  - A “title” based on performance (e.g., “Base Newbie”, “Base Solver”, “Base Legend”).
+- Use iconography and color to make it feel like RPG‑style progression.
+
+### 7. Typography & spacing
+
+- Choose a clean, modern sans-serif (e.g., Inter, DM Sans, or similar).
+- Use Tailwind typography scale consistently:
+  - App title: `text-2xl sm:text-3xl font-semibold`.
+  - Section titles (Leaderboard, Stats): `text-lg font-semibold`.
+  - Body text: `text-sm sm:text-base`.
+- Apply generous spacing:
+  - `space-y-4` / `space-y-6` inside cards.
+  - `gap-6 lg:gap-8` between major layout regions.
+
+### 8. Dark-first design & accessibility
+
+- Treat the gradient + glass UI as a dark theme by default.
+- Ensure contrast:
+  - Text on glass cards should be near-white.
+  - Buttons must have sufficient contrast against backgrounds.
+- Use Tailwind focus-visible utilities:
+  - `focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950`.
+- Make grids keyboard-navigable:
+  - Arrow keys move selection.
+  - Tab order makes sense.
+
+### 9. Tailwind implementation hints
+
+- Use Tailwind’s official guidance on gradients, shadows, and glassmorphism effects with `backdrop-blur`.[3][7]
+- Consider extracting reusable “card” and “pill button” class combinations into small utility components or className helpers for consistency.
+
+***
+
+Apply this entire design brief on top of the current Based Puzzles implementation. Keep the existing game logic and features, but **transform the layout, color, spacing, and interactions** so it feels like a polished, modern, Base‑inspired puzzle hub that people want to stay in and play.
+
+[1](https://tailwindcss.com/showcase)
+[2](https://tailkits.com/components/glassmorphic-card/)
+[3](https://www.epicweb.dev/tips/creating-glassmorphism-effects-with-tailwind-css)
+[4](https://www.reddit.com/r/tailwindcss/comments/15un91c/any_examples_of_tailwind_ui_in_the_wild_that_does/)
+[5](https://www.imensosoftware.com/blog/building-a-dynamic-and-responsive-dashboard-with-reactjs/)
+[6](https://tailwindcss.com)
+[7](https://tailwindcss.com/docs/colors)
+[8](https://dev.to/blamsa0mine/building-a-modern-tic-tac-toe-game-with-radix-ui-tailwind-css-v4-and-ai-collaboration-5940)
+[9](https://preline.co)
+[10](https://tailwindflex.com)
+[11](https://www.zigpoll.com/content/what-are-the-key-frontend-technologies-and-frameworks-we-should-consider-to-optimize-the-user-interface-for-realtime-player-engagement-metrics-in-our-game-marketing-dashboard)
+[12](https://flyonui.com)
+[13](https://www.youtube.com/watch?v=RmlOBhZhHrU)
+[14](https://flowbite.com)
+[15](https://www.untitledui.com/blog/react-dashboards)
+[16](https://www.youtube.com/watch?v=86rnjlaelGA)
+[17](https://stackoverflow.com/questions/71965089/i-want-to-make-responsive-dashboard-in-react-js-using-material-ui-any-helpful)
+[18](https://www.youtube.com/watch?v=Dif1cCcZNI0)
+[19](https://pagedone.io)
+[20](https://dev.to/tailwindcss/100-react-dashboard-components-to-use-in-2024-3ked)
+[21](https://uiverse.io/elements?search=game&orderBy=recent)
