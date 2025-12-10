@@ -5,6 +5,7 @@ import { mainnet, base, solana } from '@reown/appkit/networks'
 import type { AppKitNetwork } from '@reown/appkit/types'
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector'
 
 // 0. Setup queryClient
 const queryClient = new QueryClient()
@@ -27,7 +28,8 @@ const networks: [AppKitNetwork, ...AppKitNetwork[]] = [mainnet, base, solana]
 const wagmiAdapter = new WagmiAdapter({
   networks,
   projectId,
-  ssr: true
+  ssr: true,
+  connectors: [farcasterMiniApp()]
 })
 
 // 5. Create Solana adapter
