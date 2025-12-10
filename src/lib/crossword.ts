@@ -1,5 +1,61 @@
 import type { CrosswordPuzzle, CrosswordCell, CrosswordClue, Difficulty } from "./types";
 
+// For competitive/daily mode - fetch from backend
+export async function fetchDailyCrossword(date: string, walletAddress?: string): Promise<CrosswordPuzzle> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (walletAddress) {
+    headers['X-Wallet-Address'] = walletAddress;
+  }
+  const response = await fetch(`/api/puzzles/daily?date=${date}&type=crossword`, {
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch daily crossword');
+  }
+  const data = await response.json();
+  return data.puzzle;
+}
+
+export async function fetchCrosswordById(id: string, walletAddress?: string): Promise<CrosswordPuzzle> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (walletAddress) {
+    headers['X-Wallet-Address'] = walletAddress;
+  }
+  const response = await fetch(`/api/puzzles/${id}`, {
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch crossword by id');
+  }
+  const data = await response.json();
+  return data.puzzle;
+}
+
+export async function verifyCrosswordSolution(puzzleId: string, solution: string[], timeSeconds: number, walletAddress: string): Promise<{ valid: boolean; score?: number }> {
+  const response = await fetch('/api/puzzles/verify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Wallet-Address': walletAddress,
+    },
+    body: JSON.stringify({
+      puzzleId,
+      type: 'crossword',
+      solution,
+      timeSeconds,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to verify crossword solution');
+  }
+  return await response.json();
+}
+
+// Keep existing static puzzles for fallback/demo
 const BASE_PUZZLES: CrosswordPuzzle[] = [
   {
     id: 'base-basics-1',
@@ -9,14 +65,10 @@ const BASE_PUZZLES: CrosswordPuzzle[] = [
     height: 7,
     grid: [],
     clues: [
-      { id: 'a1', number: 1, direction: 'across', row: 0, col: 0, length: 4, prompt: 'The L2 network built on Ethereum by Coinbase' },
-      { id: 'a5', number: 5, direction: 'across', row: 2, col: 0, length: 7, prompt: 'Type of blockchain that uses optimistic technology' },
-      { id: 'a6', number: 6, direction: 'across', row: 4, col: 0, length: 5, prompt: 'Digital assets stored on blockchain' },
-      { id: 'a7', number: 7, direction: 'across', row: 6, col: 2, length: 5, prompt: 'The process of bridging assets to L2' },
-      { id: 'd1', number: 1, direction: 'down', row: 0, col: 0, length: 5, prompt: 'What you do with crypto when not selling' },
-      { id: 'd2', number: 2, direction: 'down', row: 0, col: 2, length: 7, prompt: 'Self-custody key phrase count word' },
-      { id: 'd3', number: 3, direction: 'down', row: 0, col: 4, length: 5, prompt: 'Native token of Ethereum' },
-      { id: 'd4', number: 4, direction: 'down', row: 2, col: 6, length: 5, prompt: 'Smart contract language' },
+      { id: 'a1', number: 1, direction: 'across', row: 0, col: 2, length: 4, prompt: 'The L2 network built on Ethereum' },
+      { id: 'a2', number: 2, direction: 'across', row: 4, col: 0, length: 7, prompt: 'Where the new economy is moving (___ economy)' },
+      { id: 'd1', number: 1, direction: 'down', row: 0, col: 2, length: 5, prompt: 'Core mantra: ___ on Base' },
+      { id: 'd2', number: 2, direction: 'down', row: 0, col: 5, length: 3, prompt: 'The gas token used on Base' },
     ],
   },
   {
@@ -27,16 +79,12 @@ const BASE_PUZZLES: CrosswordPuzzle[] = [
     height: 9,
     grid: [],
     clues: [
-      { id: 'a1', number: 1, direction: 'across', row: 0, col: 0, length: 6, prompt: 'Exchange that launched Base network' },
-      { id: 'a4', number: 4, direction: 'across', row: 2, col: 0, length: 9, prompt: 'What Base provides for the global economy (open ___)' },
-      { id: 'a6', number: 6, direction: 'across', row: 4, col: 2, length: 7, prompt: 'Base App feature for messaging' },
-      { id: 'a8', number: 8, direction: 'across', row: 6, col: 0, length: 5, prompt: 'You can ___ and earn on Base App' },
-      { id: 'a9', number: 9, direction: 'across', row: 8, col: 3, length: 6, prompt: 'Non-fungible ___ (popular on Base)' },
-      { id: 'd1', number: 1, direction: 'down', row: 0, col: 0, length: 7, prompt: 'Base community members are often called ___ builders' },
-      { id: 'd2', number: 2, direction: 'down', row: 0, col: 3, length: 5, prompt: 'Decentralized identifier (3 letters + DOMAIN)' },
-      { id: 'd3', number: 3, direction: 'down', row: 0, col: 5, length: 9, prompt: 'What you do with friends on Base App' },
-      { id: 'd5', number: 5, direction: 'down', row: 2, col: 8, length: 5, prompt: 'Unit of transaction cost' },
-      { id: 'd7', number: 7, direction: 'down', row: 4, col: 2, length: 5, prompt: 'Base is ___ source' },
+      { id: 'a1', number: 1, direction: 'across', row: 1, col: 1, length: 4, prompt: 'Create a new NFT' },
+      { id: 'a2', number: 2, direction: 'across', row: 3, col: 0, length: 8, prompt: 'Exchange that incubated Base' },
+      { id: 'a3', number: 3, direction: 'across', row: 5, col: 2, length: 5, prompt: 'We are all gonna make it (abbr)' },
+      { id: 'd1', number: 1, direction: 'down', row: 1, col: 1, length: 5, prompt: 'Viral meme coin on Base (cat)' },
+      { id: 'd2', number: 2, direction: 'down', row: 0, col: 4, length: 5, prompt: 'Creator of Base (first name)' },
+      { id: 'd3', number: 3, direction: 'down', row: 3, col: 7, length: 3, prompt: 'Gas token' },
     ],
   },
   {
@@ -47,57 +95,54 @@ const BASE_PUZZLES: CrosswordPuzzle[] = [
     height: 11,
     grid: [],
     clues: [
-      { id: 'a1', number: 1, direction: 'across', row: 0, col: 0, length: 8, prompt: 'Technology that bundles transactions for efficiency' },
-      { id: 'a5', number: 5, direction: 'across', row: 2, col: 3, length: 8, prompt: 'Smart contract platform Base is built on' },
-      { id: 'a7', number: 7, direction: 'across', row: 4, col: 0, length: 11, prompt: 'What makes Base transactions cheaper than L1' },
-      { id: 'a9', number: 9, direction: 'across', row: 6, col: 2, length: 6, prompt: 'Cryptographic proof system (zero-knowledge)' },
-      { id: 'a10', number: 10, direction: 'across', row: 8, col: 0, length: 7, prompt: 'Transaction processing capacity' },
-      { id: 'a11', number: 11, direction: 'across', row: 10, col: 4, length: 7, prompt: 'Base uses optimistic ___ technology' },
-      { id: 'd1', number: 1, direction: 'down', row: 0, col: 0, length: 9, prompt: 'Fraud proof window period on optimistic rollups' },
-      { id: 'd2', number: 2, direction: 'down', row: 0, col: 4, length: 11, prompt: 'What secures Base network from the L1' },
-      { id: 'd3', number: 3, direction: 'down', row: 0, col: 7, length: 7, prompt: 'Transactions per second metric (abbr)' },
-      { id: 'd4', number: 4, direction: 'down', row: 0, col: 10, length: 5, prompt: 'Block reward for validators' },
-      { id: 'd6', number: 6, direction: 'down', row: 2, col: 3, length: 7, prompt: 'Moving assets between chains' },
-      { id: 'd8', number: 8, direction: 'down', row: 4, col: 8, length: 5, prompt: 'Token standard (ERC-__)' },
+      { id: 'a1', number: 1, direction: 'across', row: 0, col: 0, length: 9, prompt: 'Entity that orders transactions on L2' },
+      { id: 'a2', number: 2, direction: 'across', row: 2, col: 2, length: 4, prompt: 'Data storage unit introduced in EIP-4844' },
+      { id: 'a3', number: 3, direction: 'across', row: 4, col: 0, length: 8, prompt: 'Technology stack Base is built on' },
+      { id: 'a4', number: 4, direction: 'across', row: 6, col: 3, length: 6, prompt: 'Scaling solution type (Optimistic ___)' },
+      { id: 'd1', number: 1, direction: 'down', row: 0, col: 0, length: 10, prompt: 'Network of networks (___chain)' },
+      { id: 'd2', number: 2, direction: 'down', row: 0, col: 5, length: 7, prompt: 'Mainnet launch month (2023)' },
+      { id: 'd3', number: 3, direction: 'down', row: 4, col: 9, length: 5, prompt: 'Layer 1 blockchain' },
     ],
   },
 ];
 
 const SOLUTIONS: Record<string, string[][]> = {
   'base-basics-1': [
-    ['B', 'A', 'S', 'E', '#', '#', '#'],
-    ['U', '#', 'E', '#', 'E', '#', '#'],
-    ['R', 'O', 'L', 'L', 'T', 'U', 'P'],
-    ['N', '#', 'V', '#', 'H', '#', 'O'],
-    ['T', 'O', 'K', 'E', 'N', '#', 'S'],
-    ['#', '#', 'N', '#', '#', '#', 'T'],
-    ['#', '#', 'O', 'N', 'R', 'A', 'M'],
+    ['#', '#', 'B', 'A', 'S', 'E', '#'],
+    ['#', '#', 'U', '#', '#', 'T', '#'],
+    ['#', '#', 'I', '#', '#', 'H', '#'],
+    ['#', '#', 'L', '#', '#', '#', '#'],
+    ['O', 'N', 'C', 'H', 'A', 'I', 'N'],
+    ['#', '#', '#', '#', '#', '#', '#'],
+    ['#', '#', '#', '#', '#', '#', '#'],
   ],
   'base-culture-1': [
+    ['#', '#', '#', '#', 'J', '#', '#', '#', '#'],
+    ['#', 'M', 'I', 'N', 'T', '#', '#', '#', '#'],
+    ['#', 'O', '#', '#', 'S', '#', '#', '#', '#'],
     ['C', 'O', 'I', 'N', 'B', 'A', 'S', 'E', '#'],
-    ['R', '#', 'D', 'E', 'N', '#', 'O', '#', '#'],
-    ['Y', 'I', 'N', 'F', 'R', 'A', 'C', 'I', 'A'],
-    ['P', '#', 'S', '#', 'I', '#', 'I', '#', 'N'],
-    ['T', '#', 'C', 'H', 'A', 'T', 'A', 'L', 'K'],
-    ['O', '#', '#', '#', 'L', '#', 'L', '#', '#'],
-    ['T', 'R', 'A', 'D', 'E', '#', '#', '#', '#'],
-    ['R', '#', '#', '#', '#', '#', '#', '#', '#'],
-    ['A', '#', '#', 'T', 'O', 'K', 'E', 'N', 'S'],
+    ['#', 'C', '#', '#', 'E', '#', '#', 'T', '#'],
+    ['#', 'H', 'W', 'A', 'G', 'M', 'I', 'H', '#'],
+    ['#', 'I', '#', '#', '#', '#', '#', '#', '#'],
+    ['#', '#', '#', '#', '#', '#', '#', '#', '#'],
+    ['#', '#', '#', '#', '#', '#', '#', '#', '#'],
   ],
   'crypto-expert-1': [
-    ['R', 'O', 'L', 'L', 'S', 'E', 'C', 'T', 'P', 'S', 'A'],
-    ['E', '#', '#', '#', 'E', '#', '#', 'P', '#', '#', 'S'],
-    ['C', '#', '#', 'E', 'T', 'H', 'E', 'R', 'E', 'U', 'M'],
-    ['H', '#', '#', '#', 'C', '#', '#', 'S', '#', '#', 'O'],
-    ['S', 'C', 'A', 'L', 'A', 'B', 'I', 'L', 'I', 'T', 'Y'],
-    ['L', '#', '#', '#', 'I', '#', '#', '#', '#', '#', '#'],
-    ['E', '#', 'Z', 'K', 'R', 'O', 'L', 'L', '#', '#', '#'],
-    ['N', '#', '#', '#', 'N', '#', '#', '#', '#', '#', '#'],
-    ['G', 'A', 'S', 'C', 'O', 'S', 'T', '#', '#', '#', '#'],
-    ['T', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#'],
-    ['H', '#', '#', '#', 'R', 'O', 'L', 'L', 'U', 'P', 'S'],
+    ['S', 'E', 'Q', 'U', 'E', 'N', 'C', 'E', 'R', '#', '#'],
+    ['U', '#', '#', '#', '#', 'U', '#', '#', '#', '#', '#'],
+    ['P', '#', 'B', 'L', 'O', 'B', '#', '#', '#', '#', '#'],
+    ['E', '#', '#', '#', '#', 'G', '#', '#', '#', '#', '#'],
+    ['O', 'P', 'T', 'I', 'M', 'I', 'S', 'M', '#', 'E', '#'],
+    ['C', '#', '#', '#', '#', 'S', '#', '#', '#', 'T', '#'],
+    ['H', '#', '#', 'R', 'O', 'L', 'L', 'U', 'P', 'H', '#'],
+    ['A', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#'],
+    ['I', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#'],
+    ['N', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#'],
+    ['#', '#', '#', '#', '#', '#', '#', '#', '#', '#', '#'],
   ],
 };
+
+
 
 function buildGrid(puzzle: CrosswordPuzzle): CrosswordCell[][] {
   const solution = SOLUTIONS[puzzle.id];
