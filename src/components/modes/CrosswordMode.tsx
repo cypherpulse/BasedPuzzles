@@ -62,7 +62,7 @@ export function CrosswordMode({
 
       <div className="grid lg:grid-cols-[1fr_280px] gap-6">
         <Card>
-          <CardContent className="p-2 sm:p-4 md:p-6 flex flex-col items-center gap-4 sm:gap-6">
+          <CardContent className="p-1 sm:p-2 md:p-4 lg:p-6 flex flex-col items-center gap-4 sm:gap-6">
             <div className="text-center mb-2">
               <h2 className="text-lg font-semibold" data-testid="text-puzzle-title">{puzzle.title}</h2>
             </div>
@@ -87,7 +87,7 @@ export function CrosswordMode({
         </Card>
 
         <Card className="lg:self-start">
-          <CardContent className="p-4">
+          <CardContent className="p-2 sm:p-4">
             <CrosswordClues
               clues={puzzle.clues}
               activeClueId={activeClue?.id || null}
