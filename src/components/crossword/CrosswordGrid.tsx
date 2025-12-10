@@ -35,6 +35,7 @@ export function CrosswordGrid({
   disabled,
 }: CrosswordGridProps) {
   const gridRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const activeClueCells = activeClue ? getCellsForClue(puzzle, activeClue) : new Set<string>();
 
   const moveToNextCell = useCallback((row: number, col: number, direction: 'forward' | 'backward') => {
@@ -58,7 +59,38 @@ export function CrosswordGrid({
     }
   }, [activeClue, puzzle, onCellSelect]);
 
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+  // Focus input when cell is selected
+  useEffect(() => {
+    if (selectedCell && !disabled) {
+      // Small timeout to ensure UI is ready and to handle mobile focus behavior
+      const timeoutId = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [selectedCell, disabled]);
+
+  // Keep focus on input when clicking anywhere in the grid
+  const handleGridClick = () => {
+    if (selectedCell && !disabled) {
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!selectedCell || disabled) return;
+    
+    const inputChar = e.target.value.slice(-1).toUpperCase();
+    // Reset input immediately
+    e.target.value = '';
+
+    if (inputChar >= 'A' && inputChar <= 'Z') {
+      onLetterInput(selectedCell.row, selectedCell.col, inputChar);
+      moveToNextCell(selectedCell.row, selectedCell.col, 'forward');
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!selectedCell || disabled) return;
     
     const { row, col } = selectedCell;
@@ -66,14 +98,11 @@ export function CrosswordGrid({
     
     if (cell.isBlock) return;
 
-    const key = e.key.toUpperCase();
+    // We handle letters in onChange to support mobile keyboards better
+    // But we need to prevent default for navigation keys to avoid scrolling
     
-    if (key.length === 1 && key >= 'A' && key <= 'Z') {
-      e.preventDefault();
-      onLetterInput(row, col, key);
-      moveToNextCell(row, col, 'forward');
-    } else if (e.key === 'Backspace') {
-      e.preventDefault();
+    if (e.key === 'Backspace') {
+      e.preventDefault(); // Prevent browser back
       if (cell.userLetter) {
         onLetterInput(row, col, null);
       } else {
@@ -97,21 +126,31 @@ export function CrosswordGrid({
     } else if (e.key === 'Tab') {
       e.preventDefault();
     }
-  }, [selectedCell, puzzle, onCellSelect, onLetterInput, moveToNextCell, disabled]);
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+  };
 
   return (
     <div 
       ref={gridRef}
-      className="inline-block bg-foreground/90 dark:bg-foreground/70 p-0.5 rounded-lg"
+      className="inline-block bg-foreground/90 dark:bg-foreground/70 p-0.5 rounded-lg relative"
       role="grid"
       aria-label="Crossword grid"
       data-testid="crossword-grid"
+      onClick={handleGridClick}
     >
+      <input
+        ref={inputRef}
+        type="text"
+        className="absolute opacity-0 w-px h-px overflow-hidden pointer-events-none"
+        style={{ top: 0, left: 0 }}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="characters"
+        spellCheck="false"
+        value=""
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        aria-hidden="true"
+      />
       <div 
         className="grid gap-px"
         style={{ 
