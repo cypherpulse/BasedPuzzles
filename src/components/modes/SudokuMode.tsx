@@ -70,7 +70,7 @@ export function SudokuMode({
       </div>
 
       <Card>
-        <CardContent className="p-2 sm:p-4 md:p-6 flex flex-col items-center gap-4 sm:gap-6">
+        <CardContent className="p-1 sm:p-2 md:p-4 lg:p-6 flex flex-col items-center gap-4 sm:gap-6">
           <SudokuGrid
             board={board}
             selectedCell={selectedCell}
