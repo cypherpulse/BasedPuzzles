@@ -1,5 +1,67 @@
 import type { SudokuBoard, SudokuCell, Difficulty } from "./types";
 
+// For practice mode - generate random puzzles
+export function generateSudokuPuzzle(difficulty: Difficulty): SudokuBoard {
+  // Implementation for random puzzle generation
+  // This would use algorithms to create valid Sudoku puzzles
+}
+
+// For competitive/daily mode - fetch from backend
+export async function fetchDailySudoku(date: string, walletAddress?: string): Promise<SudokuBoard> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (walletAddress) {
+    headers['X-Wallet-Address'] = walletAddress;
+  }
+  const response = await fetch(`/api/puzzles/daily?date=${date}&type=sudoku`, {
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch daily sudoku');
+  }
+  const data = await response.json();
+  return data.puzzle.grid;
+}
+
+export async function fetchSudokuById(id: string, walletAddress?: string): Promise<SudokuBoard> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (walletAddress) {
+    headers['X-Wallet-Address'] = walletAddress;
+  }
+  const response = await fetch(`/api/puzzles/${id}`, {
+    headers,
+  });
+  if (!response.ok) {
+    throw new Error('Failed to fetch sudoku by id');
+  }
+  const data = await response.json();
+  return data.puzzle.grid;
+}
+
+export async function verifySudokuSolution(puzzleId: string, solution: SudokuBoard, timeSeconds: number, walletAddress: string): Promise<{ valid: boolean; score?: number }> {
+  const response = await fetch('/api/puzzles/verify', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Wallet-Address': walletAddress,
+    },
+    body: JSON.stringify({
+      puzzleId,
+      type: 'sudoku',
+      solution,
+      timeSeconds,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to verify sudoku solution');
+  }
+  return await response.json();
+}
+
+// Keep existing static puzzles for fallback/demo
 const EASY_PUZZLES = [
   [
     [5, 3, 0, 0, 7, 0, 0, 0, 0],
@@ -13,6 +75,17 @@ const EASY_PUZZLES = [
     [0, 0, 0, 0, 8, 0, 0, 7, 9],
   ],
   [
+    [1, 0, 0, 4, 8, 9, 0, 0, 6],
+    [7, 3, 0, 0, 0, 0, 0, 4, 0],
+    [0, 0, 0, 0, 0, 1, 2, 9, 5],
+    [0, 0, 7, 1, 2, 0, 6, 0, 0],
+    [5, 0, 0, 7, 0, 3, 0, 0, 8],
+    [0, 0, 6, 0, 9, 5, 7, 0, 0],
+    [9, 1, 4, 6, 0, 0, 0, 0, 0],
+    [0, 2, 0, 0, 0, 0, 0, 3, 7],
+    [8, 0, 0, 5, 1, 2, 0, 0, 4],
+  ],
+  [
     [0, 0, 0, 2, 6, 0, 7, 0, 1],
     [6, 8, 0, 0, 7, 0, 0, 9, 0],
     [1, 9, 0, 0, 0, 4, 5, 0, 0],
@@ -22,20 +95,20 @@ const EASY_PUZZLES = [
     [0, 0, 9, 3, 0, 0, 0, 7, 4],
     [0, 4, 0, 0, 5, 0, 0, 3, 6],
     [7, 0, 3, 0, 1, 8, 0, 0, 0],
-  ],
+  ]
 ];
 
 const MEDIUM_PUZZLES = [
   [
-    [0, 0, 0, 6, 0, 0, 4, 0, 0],
-    [7, 0, 0, 0, 0, 3, 6, 0, 0],
-    [0, 0, 0, 0, 9, 1, 0, 8, 0],
-    [0, 0, 0, 0, 0, 0, 0, 0, 0],
-    [0, 5, 0, 1, 8, 0, 0, 0, 3],
-    [0, 0, 0, 3, 0, 6, 0, 4, 5],
-    [0, 4, 0, 2, 0, 0, 0, 6, 0],
-    [9, 0, 3, 0, 0, 0, 0, 0, 0],
-    [0, 2, 0, 0, 0, 0, 1, 0, 0],
+    [0, 2, 0, 6, 0, 8, 0, 0, 0],
+    [5, 8, 0, 0, 0, 9, 7, 0, 0],
+    [0, 0, 0, 0, 4, 0, 0, 0, 0],
+    [3, 7, 0, 0, 0, 0, 5, 0, 0],
+    [6, 0, 0, 0, 0, 0, 0, 0, 4],
+    [0, 0, 8, 0, 0, 0, 0, 1, 3],
+    [0, 0, 0, 0, 2, 0, 0, 0, 0],
+    [0, 0, 9, 8, 0, 0, 0, 3, 6],
+    [0, 0, 0, 3, 0, 6, 0, 9, 0],
   ],
   [
     [2, 0, 0, 3, 0, 0, 0, 0, 0],
@@ -48,6 +121,17 @@ const MEDIUM_PUZZLES = [
     [6, 0, 1, 2, 5, 0, 8, 0, 9],
     [0, 0, 0, 0, 0, 1, 0, 0, 2],
   ],
+  [
+    [0, 0, 0, 6, 0, 0, 4, 0, 0],
+    [7, 0, 0, 0, 0, 3, 6, 0, 0],
+    [0, 0, 0, 0, 9, 1, 0, 8, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 5, 0, 1, 8, 0, 0, 0, 3],
+    [0, 0, 0, 3, 0, 6, 0, 4, 5],
+    [0, 4, 0, 2, 0, 0, 0, 6, 0],
+    [9, 0, 3, 0, 0, 0, 0, 0, 0],
+    [0, 2, 0, 0, 0, 0, 1, 0, 0],
+  ]
 ];
 
 const HARD_PUZZLES = [
@@ -73,6 +157,17 @@ const HARD_PUZZLES = [
     [0, 0, 4, 0, 0, 0, 0, 3, 0],
     [0, 0, 0, 0, 0, 9, 7, 0, 0],
   ],
+  [
+    [0, 0, 0, 8, 0, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 4, 3, 0],
+    [5, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 7, 0, 8, 0, 0],
+    [0, 0, 0, 0, 0, 0, 1, 0, 0],
+    [0, 2, 0, 0, 3, 0, 0, 0, 0],
+    [6, 0, 0, 0, 0, 0, 0, 7, 5],
+    [0, 0, 3, 4, 0, 0, 0, 0, 0],
+    [0, 0, 0, 2, 0, 0, 6, 0, 0],
+  ]
 ];
 
 function getPuzzlesByDifficulty(difficulty: Difficulty): number[][][] {
