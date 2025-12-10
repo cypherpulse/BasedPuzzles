@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getSudokuPuzzle, cloneBoard, isBoardSolved, getErrorCells, getDailySudokuPuzzle, getDailySudokuDifficulty } from "@/lib/sudoku";
+import { getSudokuPuzzle, cloneBoard, isBoardSolved, getErrorCells, getDailySudokuPuzzle, getDailySudokuDifficulty, fetchDailySudoku, verifySudokuSolution } from "@/lib/sudoku";
 import type { SudokuBoard, Difficulty, GameStatus, ChallengeType } from "@/lib/types";
 import { getTodayDateString } from "@/lib/types";
+import { useWalletAddress } from "@/hooks/useWalletAddress";
 
 interface UseSudokuGameOptions {
   onGameStart?: () => void;
@@ -11,6 +12,7 @@ interface UseSudokuGameOptions {
 export function useSudokuGame(options?: UseSudokuGameOptions) {
   const challengeType = options?.challengeType ?? 'practice';
   const today = getTodayDateString();
+  const { address } = useWalletAddress();
   
   const [difficulty, setDifficultyState] = useState<Difficulty>(() => {
     if (challengeType === 'daily') {
@@ -25,6 +27,7 @@ export function useSudokuGame(options?: UseSudokuGameOptions) {
     return getSudokuPuzzle('easy');
   });
   const [initialBoard, setInitialBoard] = useState<SudokuBoard>(() => cloneBoard(board));
+  const [loading, setLoading] = useState(challengeType === 'daily');
   const [selectedCell, setSelectedCell] = useState<{ row: number; col: number } | null>(null);
   const [errors, setErrors] = useState<Set<string>>(new Set());
   const [timerSeconds, setTimerSeconds] = useState(0);
@@ -32,6 +35,31 @@ export function useSudokuGame(options?: UseSudokuGameOptions) {
   const [hasStarted, setHasStarted] = useState(false);
   const [hintsUsed, setHintsUsed] = useState(0);
   const timerRef = useRef<number | null>(null);
+
+  // Load board
+  useEffect(() => {
+    const loadBoard = async () => {
+      if (challengeType === 'daily') {
+        try {
+          const fetchedBoard = await fetchDailySudoku(today, address || undefined);
+          setBoard(fetchedBoard);
+          setInitialBoard(cloneBoard(fetchedBoard));
+        } catch (error) {
+          console.error('Failed to load daily sudoku:', error);
+          // Fallback to local
+          const localBoard = getDailySudokuPuzzle(today);
+          setBoard(localBoard);
+          setInitialBoard(cloneBoard(localBoard));
+        }
+      } else {
+        const localBoard = getSudokuPuzzle(difficulty);
+        setBoard(localBoard);
+        setInitialBoard(cloneBoard(localBoard));
+      }
+      setLoading(false);
+    };
+    loadBoard();
+  }, [challengeType, today, difficulty, address]);
 
   useEffect(() => {
     if (status === 'playing' && hasStarted) {
@@ -133,9 +161,29 @@ export function useSudokuGame(options?: UseSudokuGameOptions) {
     return false;
   }, [board]);
 
+  const submitSolution = useCallback(async () => {
+    if (!board || !address || challengeType !== 'daily') return false;
+    
+    try {
+      const solution = board.flat().map(cell => cell.value || 0);
+      const result = await verifySudokuSolution(board.id, solution, timerSeconds, address);
+      if (result.valid) {
+        setStatus('solved');
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+        }
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to verify solution:', error);
+    }
+    return false;
+  }, [board, address, challengeType, timerSeconds]);
+
   return {
     board,
     initialBoard,
+    loading,
     selectedCell,
     errors,
     difficulty,
@@ -149,6 +197,7 @@ export function useSudokuGame(options?: UseSudokuGameOptions) {
     updateCell,
     resetBoard,
     checkSolution,
+    submitSolution,
     setHintsUsed,
   };
 }
