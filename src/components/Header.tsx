@@ -4,6 +4,8 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { AppKitButton } from "@reown/appkit/react";
 import type { PlayerStats } from "@/lib/types";
 import { getPlayerTitle } from "@/lib/types";
+import { sdk } from "@farcaster/miniapp-sdk";
+import { useEffect, useState } from "react";
 
 interface HeaderProps {
   stats: PlayerStats;
@@ -13,6 +15,15 @@ interface HeaderProps {
 export function Header({ stats, onProfileClick }: HeaderProps) {
   const title = getPlayerTitle(stats);
   const totalGames = stats.sudoku.gamesCompleted + stats.crossword.gamesCompleted;
+  const [isMiniApp, setIsMiniApp] = useState(false);
+
+  useEffect(() => {
+    const checkMiniApp = async () => {
+      const isMini = await sdk.isInMiniApp();
+      setIsMiniApp(isMini);
+    };
+    checkMiniApp();
+  }, []);
   
   return (
     <header className="h-16 border-b bg-background px-4 md:px-6 flex items-center justify-between gap-4" data-testid="header">
@@ -26,7 +37,7 @@ export function Header({ stats, onProfileClick }: HeaderProps) {
       
       <div className="flex items-center gap-2">
         <ThemeToggle />
-        <AppKitButton />
+        {!isMiniApp && <AppKitButton />}
         <button 
           onClick={onProfileClick}
           className="flex items-center gap-3 hover-elevate active-elevate-2 rounded-lg px-3 py-2 transition-colors"
