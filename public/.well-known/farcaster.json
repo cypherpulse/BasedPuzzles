@@ -10,7 +10,7 @@
     "iconUrl": "https://based-puzzles.vercel.app/logo.png",
     "homeUrl": "https://based-puzzles.vercel.app",
     "splashImageUrl": "https://based-puzzles.vercel.app/logo.png",
-    "splashBackgroundColor": "#0000ff",
+    "splashBackgroundColor": "#ffff",
     "subtitle": "Brain games on Base",
     "description": "Challenge yourself with Sudoku and Base-themed Crossword puzzles. Track your stats, compete on leaderboards, and build your streak.",
     "primaryCategory": "games",
